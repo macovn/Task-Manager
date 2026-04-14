@@ -17,6 +17,7 @@ export function useUpdateTask() {
       if (!currentTask) throw new Error('Task not found');
 
       const payload: any = { ...updates };
+      console.log('Updating task:', id, 'Payload:', payload);
 
       // 1. Log events for behavior tracking
       if (updates.status === 'done' && currentTask.status !== 'done') {
@@ -45,8 +46,8 @@ export function useUpdateTask() {
       if (isPriorityImpacted) {
         // Fetch user patterns for smarter suggestions
         const profile = await taskService.fetchProfile(user?.id || '');
-        const delayFactor = profile?.productivity_score || 1.0;
-        const preferredStart = profile?.preferred_working_hours?.start || 9;
+        const delayFactor = profile?.productivity_score ?? 1.0;
+        const preferredStart = profile?.preferred_working_hours?.start ?? 9;
 
         if (updates.ai_priority_score === undefined) {
           payload.ai_priority_score = calculatePriority({ ...currentTask, ...updates }, delayFactor);

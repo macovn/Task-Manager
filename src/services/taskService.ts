@@ -27,6 +27,7 @@ export const taskService = {
 
   async updateTask(id: string, updates: Partial<Task>) {
     const supabase = getSupabaseClient();
+    console.log('Supabase Update Request:', { id, updates });
     const { data, error } = await supabase
       .from('tasks')
       .update(updates)
@@ -34,7 +35,11 @@ export const taskService = {
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase Update Error:', error);
+      throw error;
+    }
+    console.log('Supabase Update Success:', data);
     return data as Task;
   },
 
@@ -54,18 +59,31 @@ export const taskService = {
       .from('task_events')
       .insert([event]);
     
-    if (error) console.error('Error logging event:', error);
+    if (error) {
+      console.warn('Error logging event (table might be missing):', error.message);
+    }
   },
 
   async fetchProfile(userId: string) {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116' || error.message.includes('404')) {
+          console.warn('Profile not found or table missing, returning null');
+          return null;
+        }
+        throw error;
+      }
+      return data;
+    } catch (err) {
+      console.warn('Failed to fetch profile:', err);
+      return null;
+    }
   }
 };

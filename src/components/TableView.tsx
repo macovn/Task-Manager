@@ -173,7 +173,7 @@ export default function TableView() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200">
-                <th className="px-6 py-4 text-xs font-bold text-neutral-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-xs font-bold text-neutral-500 uppercase tracking-wider min-w-[300px]">
                   <button onClick={() => toggleSort('title')} className="flex items-center gap-1 hover:text-neutral-900 transition-colors">
                     Title <ArrowUpDown className="w-3 h-3" />
                   </button>
@@ -208,13 +208,11 @@ export default function TableView() {
               ) : (
                 filteredAndSortedTasks.map((task) => (
                   <tr key={task.id} className="hover:bg-neutral-50/50 transition-colors group">
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 min-w-[300px]" title={task.title}>
                       <div className="flex flex-col">
-                        <input 
-                          value={task.title}
-                          onChange={(e) => updateTask.mutate({ id: task.id, title: e.target.value })}
-                          className="font-bold text-neutral-900 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-1 -ml-1 outline-none w-full"
-                        />
+                        <div className="font-bold text-neutral-900 whitespace-normal break-words">
+                          {task.title}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           {task.tags?.map(tag => (
                             <span key={tag} className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-neutral-100 text-neutral-500 rounded-md">
