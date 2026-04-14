@@ -8,13 +8,15 @@ CREATE TABLE tasks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
-  status TEXT DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
+  status TEXT DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done', 'archived')),
   priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
   due_date TIMESTAMP WITH TIME ZONE,
   assignee_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   ai_priority_score FLOAT DEFAULT 50,
+  ai_last_scored_at TIMESTAMP WITH TIME ZONE,
+  ai_model TEXT,
   estimated_time INT DEFAULT 30, -- in minutes
   duration_estimate INT, -- in minutes
   start_date TIMESTAMP WITH TIME ZONE,

@@ -41,8 +41,8 @@ export default function RegisterPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-2xl mb-4 shadow-lg shadow-green-200">
             <UserPlus className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-neutral-900">Create Account</h1>
-          <p className="text-neutral-500 mt-2">Start organizing your tasks today</p>
+          <h1 className="text-3xl font-bold text-neutral-900">Tạo tài khoản</h1>
+          <p className="text-neutral-500 mt-2">Bắt đầu sắp xếp công việc của bạn ngay hôm nay</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-6">
@@ -53,7 +53,7 @@ export default function RegisterPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Địa chỉ Email</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
               <input
@@ -68,7 +68,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Mật khẩu</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
               <input
@@ -87,14 +87,14 @@ export default function RegisterPage() {
             disabled={loading}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-green-200 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign Up'}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Đăng ký'}
           </button>
         </form>
 
         <p className="text-center mt-8 text-neutral-600">
-          Already have an account?{' '}
+          Đã có tài khoản?{' '}
           <Link to="/login" className="text-green-600 font-semibold hover:underline">
-            Sign in
+            Đăng nhập
           </Link>
         </p>
       </motion.div>

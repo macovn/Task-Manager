@@ -41,8 +41,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-200">
             <LogIn className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-neutral-900">Welcome Back</h1>
-          <p className="text-neutral-500 mt-2">Sign in to manage your tasks</p>
+          <h1 className="text-3xl font-bold text-neutral-900">Chào mừng trở lại</h1>
+          <p className="text-neutral-500 mt-2">Đăng nhập để quản lý nhiệm vụ của bạn</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -53,7 +53,7 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Địa chỉ Email</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
               <input
@@ -68,7 +68,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Mật khẩu</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
               <input
@@ -87,14 +87,14 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Đăng nhập'}
           </button>
         </form>
 
         <p className="text-center mt-8 text-neutral-600">
-          Don't have an account?{' '}
+          Chưa có tài khoản?{' '}
           <Link to="/register" className="text-blue-600 font-semibold hover:underline">
-            Create one
+            Tạo tài khoản mới
           </Link>
         </p>
       </motion.div>

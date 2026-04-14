@@ -100,7 +100,7 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
           >
             <div className="flex items-center justify-between p-6 border-b border-neutral-100">
               <h2 className="text-xl font-bold text-neutral-900">
-                {initialData ? 'Edit Task' : 'Create New Task'}
+                {initialData ? 'Chỉnh sửa nhiệm vụ' : 'Tạo nhiệm vụ mới'}
               </h2>
               <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
                 <X className="w-5 h-5 text-neutral-500" />
@@ -109,57 +109,57 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
               <div>
-                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Task Title</label>
+                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Tiêu đề nhiệm vụ</label>
                 <input
                   autoFocus
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="What needs to be done?"
+                  placeholder="Cần làm gì?"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Description</label>
+                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Mô tả</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all min-h-[80px]"
-                  placeholder="Add more details..."
+                  placeholder="Thêm chi tiết..."
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Priority</label>
+                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Ưu tiên</label>
                   <select
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as Task['priority'])}
                     className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
+                    <option value="low">Thấp</option>
+                    <option value="medium">Trung bình</option>
+                    <option value="high">Cao</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Energy Level</label>
+                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Mức năng lượng</label>
                   <select
                     value={energyLevel || 'medium'}
                     onChange={(e) => setEnergyLevel(e.target.value as Task['energy_level'])}
                     className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   >
-                    <option value="low">Low Energy</option>
-                    <option value="medium">Medium Energy</option>
-                    <option value="high">High Energy</option>
+                    <option value="low">Năng lượng thấp</option>
+                    <option value="medium">Năng lượng trung bình</option>
+                    <option value="high">Năng lượng cao</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Start Date</label>
+                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Ngày bắt đầu</label>
                   <input
                     type="date"
                     value={startDate}
@@ -168,7 +168,7 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Due Date</label>
+                  <label className="block text-sm font-bold text-neutral-700 mb-1.5">Hạn chót</label>
                   <input
                     type="date"
                     value={dueDate}
@@ -179,7 +179,7 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Estimated Time (minutes)</label>
+                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Thời gian ước tính (phút)</label>
                 <input
                   type="number"
                   min="5"
@@ -187,12 +187,12 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
                   value={estimatedTime}
                   onChange={(e) => setEstimatedTime(e.target.value)}
                   className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="e.g. 30, 60, 120"
+                  placeholder="vd: 30, 60, 120"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Tags</label>
+                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Thẻ (Tags)</label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {tags.map(tag => (
                     <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-lg border border-blue-100">
@@ -210,7 +210,7 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                     className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                    placeholder="Add a tag..."
+                    placeholder="Thêm thẻ..."
                   />
                   <button
                     type="button"
@@ -228,14 +228,14 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
                   onClick={onClose}
                   className="flex-1 px-4 py-3 border border-neutral-200 text-neutral-700 font-bold rounded-xl hover:bg-neutral-50 transition-colors"
                 >
-                  Cancel
+                  Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
                   className="flex-1 px-4 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
                 >
-                  {isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : (initialData ? 'Update Task' : 'Create Task')}
+                  {isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : (initialData ? 'Cập nhật' : 'Tạo nhiệm vụ')}
                 </button>
               </div>
             </form>

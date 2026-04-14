@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { taskService } from '../../services/taskService';
 import { useAuth } from '../../contexts/AuthContext';
-import { calculatePriority } from '../ai/priority';
+import { calculatePriority } from '../ai/gemini';
 import { suggestSchedule } from '../ai/scheduler';
 import { Task } from '../../types';
 import { useTasks } from './useTasks';
@@ -39,23 +39,30 @@ export function useUpdateTask() {
       }
 
       const isPriorityImpacted = 
-        updates.due_date !== undefined || 
-        updates.priority !== undefined || 
-        updates.estimated_time !== undefined;
+        (updates.due_date !== undefined && updates.due_date !== currentTask.due_date) || 
+        (updates.priority !== undefined && updates.priority !== currentTask.priority) || 
+        (updates.description !== undefined && updates.description !== currentTask.description) ||
+        (updates.estimated_time !== undefined && updates.estimated_time !== currentTask.estimated_time);
 
       if (isPriorityImpacted) {
+        console.log('[AI] Meaningful change detected. Calling AI for new score.');
         // Fetch user patterns for smarter suggestions
         const profile = await taskService.fetchProfile(user?.id || '');
         const delayFactor = profile?.productivity_score ?? 1.0;
         const preferredStart = profile?.preferred_working_hours?.start ?? 9;
 
         if (updates.ai_priority_score === undefined) {
-          payload.ai_priority_score = calculatePriority({ ...currentTask, ...updates }, delayFactor);
+          const aiResult = await calculatePriority({ ...currentTask, ...updates }, delayFactor);
+          payload.ai_priority_score = aiResult.score;
+          payload.ai_model = aiResult.model;
+          payload.ai_last_scored_at = aiResult.scored_at;
         }
 
         if (updates.suggested_schedule === undefined) {
           payload.suggested_schedule = suggestSchedule({ ...currentTask, ...updates }, tasks, preferredStart);
         }
+      } else {
+        console.log('[AI] No meaningful change. Skipping AI call.');
       }
 
       return taskService.updateTask(id, payload);

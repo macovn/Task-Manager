@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import DailyPlannerPage from './pages/DailyPlannerPage';
 import WeeklyPlannerPage from './pages/WeeklyPlannerPage';
+import EisenhowerPage from './pages/EisenhowerPage';
 import { Loader2 } from 'lucide-react';
 
 const queryClient = new QueryClient();
@@ -58,6 +59,14 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <WeeklyPlannerPage />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/eisenhower" 
+              element={
+                <PrivateRoute>
+                  <EisenhowerPage />
                 </PrivateRoute>
               } 
             />
