@@ -1,20 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Debug log for Vercel deployment
-if (typeof window !== 'undefined') {
-  console.log("SUPABASE CLIENT ENV CHECK:", {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'PRESENT' : 'MISSING',
-    key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'PRESENT' : 'MISSING'
-  });
-}
+let supabaseInstance: any = null;
 
 export function getSupabaseClient() {
+  if (supabaseInstance) return supabaseInstance;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
-    throw new Error('Supabase credentials missing! Check Vercel Environment Variables.');
+  // Debug log for Vercel deployment
+  if (typeof window !== 'undefined') {
+    console.log("SUPABASE CLIENT CONFIG:", {
+      url: url ? 'FOUND' : 'MISSING',
+      key: key ? 'FOUND' : 'MISSING'
+    });
   }
 
-  return createClient(url, key);
+  if (!url || !key || url === 'undefined' || key === 'undefined') {
+    console.error('CRITICAL: Supabase credentials missing or invalid!');
+    // Return a dummy client to prevent immediate crash, but it will fail on use
+    return createClient('https://placeholder.supabase.co', 'placeholder');
+  }
+
+  supabaseInstance = createClient(url, key);
+  return supabaseInstance;
 }

@@ -16,6 +16,10 @@ CREATE TABLE tasks (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   ai_priority_score FLOAT DEFAULT 50,
   estimated_time INT DEFAULT 30, -- in minutes
+  duration_estimate INT, -- in minutes
+  start_date TIMESTAMP WITH TIME ZONE,
+  energy_level TEXT CHECK (energy_level IN ('low', 'medium', 'high')),
+  tags JSONB DEFAULT '[]',
   suggested_schedule JSONB
 );
 

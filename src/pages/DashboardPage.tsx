@@ -1,5 +1,5 @@
 import { useAuth } from '../contexts/AuthContext';
-import { useTasks } from '../hooks/useTasks';
+import { useTasks } from '../lib/hooks/useTasks';
 import { useUIStore } from '../store/useUIStore';
 import { 
   LayoutDashboard, 
@@ -27,7 +27,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function DashboardPage() {
   const { user, signOut } = useAuth();
-  const { tasks } = useTasks();
+  const { data: tasks = [] } = useTasks();
   const { view, setView, isAddTaskOpen, setAddTaskOpen, editingTask, setEditingTask } = useUIStore();
   const navigate = useNavigate();
 

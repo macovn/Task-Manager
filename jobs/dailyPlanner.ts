@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './supabase-server';
-import { generateDailyPlanServer } from '../src/lib/ai/gemini-server';
-import { getUserPatterns, logTaskEvent } from '../src/lib/ai/behavior';
+import { generateDailyPlanServer } from './gemini-server';
+import { getUserPatterns, logTaskEvent } from './behavior';
 import { addDays, startOfDay } from 'date-fns';
 
 export async function runDailyPlannerJob() {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useTasks, Task } from '../hooks/useTasks';
+import { useTasks } from '../lib/hooks/useTasks';
+import { useUpdateTask } from '../lib/hooks/useUpdateTask';
 import { useAuth } from '../contexts/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { format, isToday, parseISO, addMinutes, setHours, setMinutes } from 'date-fns';
@@ -8,9 +9,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { generateDailyPlan, generateSubtasks } from '../lib/ai/gemini';
+import { Task } from '../types';
 
 export default function DailyPlannerPage() {
-  const { tasks, isLoading, updateTask } = useTasks();
+  const { data: tasks = [], isLoading } = useTasks();
+  const updateTask = useUpdateTask();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isPlanning, setIsPlanning] = useState(false);

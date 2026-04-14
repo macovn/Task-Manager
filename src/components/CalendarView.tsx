@@ -1,11 +1,11 @@
-import { useTasks } from '../hooks/useTasks';
+import { useTasks } from '../lib/hooks/useTasks';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../lib/utils';
 
 export default function CalendarView() {
-  const { tasks } = useTasks();
+  const { data: tasks = [] } = useTasks();
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const monthStart = startOfMonth(currentDate);

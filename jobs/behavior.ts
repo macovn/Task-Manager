@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../../../jobs/supabase-server';
+import { supabaseAdmin } from './supabase-server';
 
 export interface UserPattern {
   preferred_start: number;

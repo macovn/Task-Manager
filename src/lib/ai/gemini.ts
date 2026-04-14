@@ -1,9 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (aiInstance) return aiInstance;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("GEMINI_API_KEY is missing. AI features will not work.");
+  }
+  aiInstance = new GoogleGenAI({ apiKey: apiKey || "dummy-key" });
+  return aiInstance;
+}
 
 export async function generateSubtasks(taskTitle: string) {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Break down the task "${taskTitle}" into 3-5 actionable subtasks.`,
@@ -35,6 +46,7 @@ export async function generateSubtasks(taskTitle: string) {
 
 export async function generateDailyPlan(tasks: any[]) {
   try {
+    const ai = getAI();
     const taskSummary = tasks.map(t => `- [ID: ${t.id}] ${t.title} (Priority: ${t.priority}, Est: ${t.estimated_time}m)`).join('\n');
     
     const response = await ai.models.generateContent({

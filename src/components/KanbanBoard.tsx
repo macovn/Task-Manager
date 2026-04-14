@@ -1,4 +1,6 @@
-import { useTasks, Task } from '../hooks/useTasks';
+import { useTasks } from '../lib/hooks/useTasks';
+import { useUpdateTask } from '../lib/hooks/useUpdateTask';
+import { Task } from '../types';
 import { CheckCircle2, Circle, Clock, GripVertical, Plus, Brain } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -10,7 +12,8 @@ const COLUMNS = [
 ] as const;
 
 export default function KanbanBoard() {
-  const { tasks, updateTask } = useTasks();
+  const { data: tasks = [] } = useTasks();
+  const updateTask = useUpdateTask();
 
   const handleStatusChange = (taskId: string, newStatus: Task['status']) => {
     updateTask.mutate({ id: taskId, status: newStatus });

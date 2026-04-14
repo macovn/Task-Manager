@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Task } from '../hooks/useTasks';
+import { Task } from '../types';
 
 type ViewType = 'table' | 'kanban' | 'calendar';
 

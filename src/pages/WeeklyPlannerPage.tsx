@@ -1,13 +1,14 @@
 import React from 'react';
-import { useTasks, Task } from '../hooks/useTasks';
+import { useTasks } from '../lib/hooks/useTasks';
 import { format, startOfWeek, addDays, isSameDay, parseISO } from 'date-fns';
 import { Brain, AlertTriangle, ChevronLeft, Calendar as CalendarIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { Task } from '../types';
 
 export default function WeeklyPlannerPage() {
-  const { tasks, isLoading } = useTasks();
+  const { data: tasks = [], isLoading } = useTasks();
   const navigate = useNavigate();
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
