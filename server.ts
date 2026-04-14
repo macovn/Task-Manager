@@ -4,11 +4,44 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import cron from 'node-cron';
+import rateLimit from 'express-rate-limit';
+import { createClient } from '@supabase/supabase-js';
 import { runDailyPlannerJob } from './jobs/dailyPlanner';
 import { calculatePriority } from './src/lib/ai/gemini';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Supabase for Auth verification
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+// Middleware to verify Supabase JWT
+const requireAuth = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Missing authorization header' });
+
+  const token = authHeader.split(' ')[1];
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.user = user;
+  next();
+};
+
+// Rate limiter for AI endpoints
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // Limit each IP to 50 requests per window
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 async function startServer() {
   const app = express();
@@ -25,62 +58,66 @@ async function startServer() {
   // Manual trigger for testing
   app.post('/api/admin/run-job', async (req, res) => {
     try {
-      // In a real app, add secret key check here
+      // Secret key check for admin job
+      const adminKey = req.headers['x-admin-key'];
+      if (adminKey !== process.env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       await runDailyPlannerJob();
       res.json({ message: 'Job started successfully' });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-  app.post('/api/ai/score', async (req, res) => {
+  app.post('/api/ai/score', requireAuth, aiLimiter, async (req: any, res) => {
     const { task, delayFactor } = req.body;
-    console.log(`[Server AI] Scoring task: ${task.title}`);
+    console.log(`[Server AI] Scoring task: ${task.title} for user: ${req.user.id}`);
     try {
       const scoreData = await calculatePriority(task, delayFactor);
       res.json(scoreData);
     } catch (error: any) {
       console.error('[Server AI Error]', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'Failed to calculate priority' });
     }
   });
 
-  app.post('/api/ai/plan', async (req, res) => {
+  app.post('/api/ai/plan', requireAuth, aiLimiter, async (req: any, res) => {
     const { tasks } = req.body;
-    console.log(`[Server AI] Planning ${tasks.length} tasks`);
+    console.log(`[Server AI] Planning ${tasks.length} tasks for user: ${req.user.id}`);
     try {
       const { generateDailyPlan } = await import('./src/lib/ai/gemini');
       const plan = await generateDailyPlan(tasks);
       res.json({ plan });
     } catch (error: any) {
       console.error('[Server AI Error]', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'Failed to generate plan' });
     }
   });
 
-  app.post('/api/ai/breakdown', async (req, res) => {
+  app.post('/api/ai/breakdown', requireAuth, aiLimiter, async (req: any, res) => {
     const { title } = req.body;
-    console.log(`[Server AI] Breaking down: ${title}`);
+    console.log(`[Server AI] Breaking down: ${title} for user: ${req.user.id}`);
     try {
       const { generateSubtasks } = await import('./src/lib/ai/gemini');
       const subtasks = await generateSubtasks(title);
       res.json({ subtasks });
     } catch (error: any) {
       console.error('[Server AI Error]', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'Failed to breakdown task' });
     }
   });
 
-  app.post('/api/ai/eisenhower-action', async (req, res) => {
+  app.post('/api/ai/eisenhower-action', requireAuth, aiLimiter, async (req: any, res) => {
     const { task, quadrant } = req.body;
-    console.log(`[Server AI] Eisenhower action for: ${task.title}`);
+    console.log(`[Server AI] Eisenhower action for: ${task.title} for user: ${req.user.id}`);
     try {
       const { getEisenhowerActionSuggestion } = await import('./src/lib/ai/gemini');
       const suggestion = await getEisenhowerActionSuggestion(task, quadrant);
       res.json(suggestion);
     } catch (error: any) {
       console.error('[Server AI Error]', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'Failed to get suggestion' });
     }
   });
 

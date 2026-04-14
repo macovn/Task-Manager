@@ -27,9 +27,15 @@ export async function calculatePriority(task: any, delayFactor: number = 1.0): P
   // Client-side: Call the server API
   console.log(`[AI] Requesting score for: ${task.title}`);
   try {
+    const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+    const token = session?.access_token;
+
     const response = await fetch('/api/ai/score', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ task, delayFactor })
     });
     if (!response.ok) throw new Error('Failed to fetch AI score from server');
@@ -122,9 +128,15 @@ function calculatePriorityRuleBased(task: any, delayFactor: number = 1.0) {
 export async function generateSubtasks(taskTitle: string) {
   if (!isServer) {
     try {
+      const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+      const token = session?.access_token;
+
       const response = await fetch('/api/ai/breakdown', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ title: taskTitle })
       });
       const data = await response.json();
@@ -169,9 +181,15 @@ export async function generateSubtasks(taskTitle: string) {
 export async function generateDailyPlan(tasks: any[]) {
   if (!isServer) {
     try {
+      const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+      const token = session?.access_token;
+
       const response = await fetch('/api/ai/plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ tasks })
       });
       const data = await response.json();
@@ -242,12 +260,18 @@ function getEisenhowerFallback(quadrant: string) {
 export async function getEisenhowerActionSuggestion(task: any, quadrant: string) {
   if (!isServer) {
     try {
+      const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+      const token = session?.access_token;
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500); // Slightly more than server timeout
 
       const response = await fetch('/api/ai/eisenhower-action', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ task, quadrant }),
         signal: controller.signal
       });

@@ -1,12 +1,18 @@
 import { getSupabaseClient } from '../lib/supabase/client';
 import { Task } from '../types';
+import { sanitizeInput } from '../lib/utils';
 
 export const taskService = {
   async fetchTasks() {
     const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) throw new Error('Unauthorized');
+
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
@@ -15,7 +21,17 @@ export const taskService = {
 
   async createTask(task: Partial<Task>) {
     const supabase = getSupabaseClient();
-    let currentTask = { ...task };
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) throw new Error('Unauthorized');
+
+    let currentTask = { 
+      ...task,
+      user_id: user.id,
+      title: sanitizeInput(task.title || ''),
+      description: sanitizeInput(task.description || '')
+    };
+    
     let attempt = 0;
     const maxAttempts = 10;
 
@@ -46,9 +62,17 @@ export const taskService = {
 
   async updateTask(id: string, updates: Partial<Task>) {
     const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) throw new Error('Unauthorized');
+
     console.log('Supabase Update Request:', { id, updates });
     
     let currentUpdates = { ...updates };
+    
+    if (updates.title !== undefined) currentUpdates.title = sanitizeInput(updates.title);
+    if (updates.description !== undefined) currentUpdates.description = sanitizeInput(updates.description);
+
     let attempt = 0;
     const maxAttempts = 10;
 
@@ -57,6 +81,7 @@ export const taskService = {
         .from('tasks')
         .update(currentUpdates)
         .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single();
       
@@ -86,10 +111,15 @@ export const taskService = {
 
   async deleteTask(id: string) {
     const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) throw new Error('Unauthorized');
+
     const { error } = await supabase
       .from('tasks')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
     
     if (error) throw error;
   },
@@ -107,6 +137,13 @@ export const taskService = {
 
   async fetchProfile(userId: string) {
     const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user || user.id !== userId) {
+      console.warn('Unauthorized profile fetch attempt');
+      return null;
+    }
+
     try {
       const { data, error } = await supabase
         .from('profiles')
