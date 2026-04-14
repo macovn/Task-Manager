@@ -17,6 +17,15 @@ export interface Task {
   energy_level: 'low' | 'medium' | 'high' | null;
   tags: string[];
   suggested_schedule: { start: string; end: string } | null;
+  is_rescheduled: boolean;
+  started_at: string | null;
+  completed_at: string | null;
+  paused_at: string | null;
+  actual_duration: number | null;
+  total_elapsed: number;
+  interruption_count: number;
+  needs_attention: boolean;
+  is_adjusted: boolean;
 }
 
 export interface UserProfile {

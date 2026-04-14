@@ -1,9 +1,11 @@
 import { useTasks } from '../lib/hooks/useTasks';
 import { useUpdateTask } from '../lib/hooks/useUpdateTask';
 import { Task } from '../types';
-import { CheckCircle2, Circle, Clock, GripVertical, Plus, Brain } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, GripVertical, Plus, Brain, Play, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
+import { useFocusMode } from '../lib/hooks/useFocusMode';
+import { analyzeTaskRisk } from '../lib/ai/riskEngine';
 
 const COLUMNS = [
   { id: 'todo', title: 'To Do', color: 'bg-neutral-100 text-neutral-700' },
@@ -14,6 +16,7 @@ const COLUMNS = [
 export default function KanbanBoard() {
   const { data: tasks = [] } = useTasks();
   const updateTask = useUpdateTask();
+  const { activeTaskId, startTask, completeTask } = useFocusMode();
 
   const handleStatusChange = (taskId: string, newStatus: Task['status']) => {
     updateTask.mutate({ id: taskId, status: newStatus });
@@ -38,35 +41,77 @@ export default function KanbanBoard() {
           <div className="flex-1 space-y-4">
             {tasks
               .filter((task) => task.status === column.id)
-              .map((task) => (
-                <motion.div
-                  layout
-                  key={task.id}
-                  className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex flex-wrap gap-2">
-                      <span className={cn(
-                        "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded",
-                        task.priority === 'high' ? "bg-red-50 text-red-600" :
-                        task.priority === 'medium' ? "bg-amber-50 text-amber-600" :
-                        "bg-blue-50 text-blue-600"
-                      )}>
-                        {task.priority}
-                      </span>
-                      <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1",
-                        task.ai_priority_score > 80 ? "bg-red-600 text-white" :
-                        task.ai_priority_score > 60 ? "bg-amber-500 text-white" :
-                        "bg-blue-500 text-white"
-                      )}>
-                        <Brain className="w-2.5 h-2.5" />
-                        {Math.round(task.ai_priority_score)}
-                      </span>
+              .map((task) => {
+                const risk = analyzeTaskRisk(task, tasks);
+                return (
+                  <motion.div
+                    layout
+                    key={task.id}
+                    className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex flex-wrap gap-2">
+                        <span className={cn(
+                          "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded",
+                          task.priority === 'high' ? "bg-red-50 text-red-600" :
+                          task.priority === 'medium' ? "bg-amber-50 text-amber-600" :
+                          "bg-blue-50 text-blue-600"
+                        )}>
+                          {task.priority}
+                        </span>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1",
+                          task.ai_priority_score > 80 ? "bg-red-600 text-white" :
+                          task.ai_priority_score > 60 ? "bg-amber-500 text-white" :
+                          "bg-blue-500 text-white"
+                        )}>
+                          <Brain className="w-2.5 h-2.5" />
+                          {Math.round(task.ai_priority_score)}
+                        </span>
+                        {risk.risk_level !== 'low' && (
+                          <span className={cn(
+                            "text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1",
+                            risk.risk_level === 'high' ? "bg-red-100 text-red-700 border border-red-200" : "bg-amber-100 text-amber-700 border border-amber-200"
+                          )}>
+                            <AlertCircle className="w-2.5 h-2.5" />
+                            Rủi ro: {risk.risk_level}
+                          </span>
+                        )}
+                      {task.interruption_count > 2 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded flex items-center gap-1">
+                          <AlertCircle className="w-2.5 h-2.5" />
+                          Khó
+                        </span>
+                      )}
+                      {task.is_adjusted && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded">
+                          Đã điều chỉnh
+                        </span>
+                      )}
                     </div>
                     <GripVertical className="w-4 h-4 text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <h4 className="font-semibold text-neutral-900 mb-1">{task.title}</h4>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h4 className="font-semibold text-neutral-900 truncate">{task.title}</h4>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {activeTaskId === task.id ? (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); completeTask(task.id, task.estimated_time); }}
+                          className="p-1.5 bg-green-50 text-green-600 rounded-lg border border-green-100"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); startTask(task.id); }}
+                          disabled={!!activeTaskId}
+                          className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 disabled:opacity-50"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <p className="text-sm text-neutral-500 line-clamp-2 mb-4">{task.description}</p>
                   
                   <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
@@ -86,7 +131,8 @@ export default function KanbanBoard() {
                     </select>
                   </div>
                 </motion.div>
-              ))}
+              );
+            })}
           </div>
         </div>
       ))}

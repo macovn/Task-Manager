@@ -10,14 +10,17 @@ import {
   User,
   Brain,
   CalendarDays,
-  Grid2X2
+  Grid2X2,
+  Timer
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useFocusStore } from '../store/useFocusStore';
 
 export default function Sidebar() {
   const { user, signOut } = useAuth();
   const { view, setView } = useUIStore();
+  const { activeTaskId } = useFocusStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -111,6 +114,16 @@ export default function Sidebar() {
           >
             <Grid2X2 className="w-5 h-5" />
             Ma trận Eisenhower
+          </button>
+          <button 
+            onClick={() => navigate('/planner/daily')}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium",
+              location.pathname === '/planner/daily' && activeTaskId ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "text-neutral-500 hover:bg-neutral-50"
+            )}
+          >
+            <Timer className={cn("w-5 h-5", activeTaskId ? "animate-pulse" : "")} />
+            Chế độ tập trung
           </button>
         </div>
       </nav>

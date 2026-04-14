@@ -15,16 +15,22 @@ import {
   ChevronDown,
   Calendar,
   Zap,
-  Tag as TagIcon
+  Tag as TagIcon,
+  Play,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { useFocusMode } from '../lib/hooks/useFocusMode';
+import { analyzeTaskRisk } from '../lib/ai/riskEngine';
 
 export default function TableView() {
   const { data: tasks = [], isLoading } = useTasks();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const { setEditingTask } = useUIStore();
+  const { activeTaskId, startTask, completeTask } = useFocusMode();
 
   // Filters & Sorting State
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -206,14 +212,36 @@ export default function TableView() {
                   </td>
                 </tr>
               ) : (
-                filteredAndSortedTasks.map((task) => (
-                  <tr key={task.id} className="hover:bg-neutral-50/50 transition-colors group">
-                    <td className="px-6 py-4 min-w-[300px]" title={task.title}>
-                      <div className="flex flex-col">
-                        <div className="font-bold text-neutral-900 whitespace-normal break-words">
-                          {task.title}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
+                filteredAndSortedTasks.map((task) => {
+                  const risk = analyzeTaskRisk(task, tasks);
+                  return (
+                    <tr key={task.id} className="hover:bg-neutral-50/50 transition-colors group">
+                      <td className="px-6 py-4 min-w-[300px]" title={task.title}>
+                        <div className="flex flex-col">
+                          <div className="font-bold text-neutral-900 whitespace-normal break-words">
+                            {task.title}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {risk.risk_level !== 'low' && (
+                              <span className={cn(
+                                "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md",
+                                risk.risk_level === 'high' ? "bg-red-100 text-red-700 border border-red-200" : "bg-amber-100 text-amber-700 border border-amber-200"
+                              )}>
+                                <AlertCircle className="w-2.5 h-2.5" />
+                                Rủi ro: {risk.risk_level}
+                              </span>
+                            )}
+                            {task.interruption_count > 2 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-md">
+                              <AlertCircle className="w-2.5 h-2.5" />
+                              Nhiệm vụ khó
+                            </span>
+                          )}
+                          {task.is_adjusted && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded-md">
+                              Đã điều chỉnh
+                            </span>
+                          )}
                           {task.tags?.map(tag => (
                             <span key={tag} className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-neutral-100 text-neutral-500 rounded-md">
                               <TagIcon className="w-2 h-2" />
@@ -292,6 +320,24 @@ export default function TableView() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {activeTaskId === task.id ? (
+                          <button 
+                            onClick={() => completeTask(task.id, task.estimated_time)}
+                            className="p-2 bg-green-50 hover:bg-green-100 border border-green-200 rounded-xl text-green-600 transition-all"
+                            title="Hoàn thành"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => startTask(task.id)}
+                            disabled={!!activeTaskId}
+                            className="p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-blue-600 transition-all disabled:opacity-50"
+                            title="Bắt đầu Focus"
+                          >
+                            <Play className="w-4 h-4" />
+                          </button>
+                        )}
                         <button 
                           onClick={() => setEditingTask(task)}
                           className="p-2 hover:bg-white hover:shadow-sm border border-transparent hover:border-neutral-200 rounded-xl text-neutral-500 transition-all"
@@ -307,9 +353,10 @@ export default function TableView() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
+                );
+              })
+            )}
+          </tbody>
           </table>
         </div>
       </div>

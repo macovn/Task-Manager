@@ -15,32 +15,73 @@ export const taskService = {
 
   async createTask(task: Partial<Task>) {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert([task])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data as Task;
+    let currentTask = { ...task };
+    let attempt = 0;
+    const maxAttempts = 10;
+
+    while (attempt < maxAttempts) {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([currentTask])
+        .select()
+        .single();
+      
+      if (error) {
+        if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+          const match = error.message.match(/column "(.+)" of relation "tasks" does not exist/);
+          if (match && match[1]) {
+            const missingColumn = match[1];
+            console.warn(`Column ${missingColumn} missing in DB. Removing from insert payload.`);
+            delete (currentTask as any)[missingColumn];
+            attempt++;
+            continue;
+          }
+        }
+        throw error;
+      }
+      return data as Task;
+    }
+    throw new Error('Failed to create task after multiple attempts to filter missing columns');
   },
 
   async updateTask(id: string, updates: Partial<Task>) {
     const supabase = getSupabaseClient();
     console.log('Supabase Update Request:', { id, updates });
-    const { data, error } = await supabase
-      .from('tasks')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
     
-    if (error) {
-      console.error('Supabase Update Error:', error);
-      throw error;
+    let currentUpdates = { ...updates };
+    let attempt = 0;
+    const maxAttempts = 10;
+
+    while (attempt < maxAttempts) {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(currentUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        // Handle "column does not exist" error
+        if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+          const match = error.message.match(/column tasks\.(.+) does not exist/);
+          if (match && match[1]) {
+            const missingColumn = match[1];
+            console.warn(`Column ${missingColumn} missing in DB. Removing from update payload.`);
+            delete (currentUpdates as any)[missingColumn];
+            attempt++;
+            continue;
+          }
+        }
+        
+        console.error('Supabase Update Error:', error);
+        throw error;
+      }
+      
+      console.log('Supabase Update Success:', data);
+      return data as Task;
     }
-    console.log('Supabase Update Success:', data);
-    return data as Task;
+    
+    throw new Error('Failed to update task after multiple attempts to filter missing columns');
   },
 
   async deleteTask(id: string) {

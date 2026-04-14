@@ -11,15 +11,22 @@ import { cn } from '../lib/utils';
 import { generateDailyPlan, generateSubtasks } from '../lib/ai/gemini';
 import { Task } from '../types';
 import { useScheduler } from '../lib/hooks/useScheduler';
+import { useFocusMode } from '../lib/hooks/useFocusMode';
+import { smartReschedule } from '../lib/ai/smartReschedule';
+import { analyzeTaskRisk } from '../lib/ai/riskEngine';
+import { useRiskAnalysis } from '../hooks/useRiskAnalysis';
+import { Play, CheckCircle, Timer } from 'lucide-react';
 
 import Sidebar from '../components/Sidebar';
 
 export default function DailyPlannerPage() {
   const { data: tasks = [], isLoading } = useTasks();
+  const { stats: riskStats } = useRiskAnalysis();
   const updateTask = useUpdateTask();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { getDaySchedule, schedule: fullSchedule } = useScheduler();
+  const { activeTaskId, startTask, completeTask } = useFocusMode();
   
   const [isPlanning, setIsPlanning] = useState(false);
   const [aiPlan, setAiPlan] = useState<any[] | null>(null);
@@ -31,6 +38,26 @@ export default function DailyPlannerPage() {
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('timeline');
 
   const todaySchedule = useMemo(() => getDaySchedule(new Date()), [fullSchedule]);
+ 
+  const handleAutoReschedule = async () => {
+    const updates = smartReschedule(tasks, todaySchedule);
+    if (updates.length === 0) {
+      setError('Không có nhiệm vụ nào cần lên lịch lại.');
+      return;
+    }
+    
+    setIsPlanning(true);
+    try {
+      for (const update of updates) {
+        await updateTask.mutateAsync(update as any);
+      }
+    } catch (err: any) {
+      console.error('Reschedule Error:', err);
+      setError('Không thể tự động lên lịch lại. Vui lòng kiểm tra cấu trúc cơ sở dữ liệu.');
+    } finally {
+      setIsPlanning(false);
+    }
+  };
 
   React.useEffect(() => {
     const fetchProfile = async () => {
@@ -176,6 +203,15 @@ export default function DailyPlannerPage() {
               </div>
 
               <button
+                onClick={handleAutoReschedule}
+                disabled={isPlanning}
+                className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all disabled:opacity-50 shadow-lg shadow-amber-100"
+              >
+                <Clock className="w-4 h-4" />
+                Lên lịch lại
+              </button>
+
+              <button
                 onClick={handleApplySmartSchedule}
                 disabled={isPlanning || todaySchedule.length === 0}
                 className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 shadow-lg shadow-blue-100"
@@ -185,6 +221,20 @@ export default function DailyPlannerPage() {
               </button>
             </div>
           </header>
+
+          {riskStats.atRiskCount > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-4 text-red-700"
+            >
+              <AlertCircle className="w-6 h-6 flex-shrink-0" />
+              <div>
+                <p className="font-bold">Cảnh báo rủi ro cao!</p>
+                <p className="text-sm">Bạn có {riskStats.atRiskCount} nhiệm vụ có nguy cơ trễ hạn. Hãy ưu tiên xử lý ngay.</p>
+              </div>
+            </motion.div>
+          )}
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-sm font-medium flex items-center gap-2">
@@ -255,6 +305,25 @@ export default function DailyPlannerPage() {
                               </div>
                             </div>
                           </div>
+
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                            {activeTaskId === item.task_id ? (
+                              <button 
+                                onClick={() => completeTask(item.task_id, Math.round((parseISO(item.end_time).getTime() - parseISO(item.start_time).getTime()) / 60000))}
+                                className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-xl transition-all border border-green-200"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => startTask(item.task_id)}
+                                disabled={!!activeTaskId}
+                                className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all border border-blue-200 disabled:opacity-50"
+                              >
+                                <Play className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </motion.div>
                     ))
@@ -273,6 +342,7 @@ export default function DailyPlannerPage() {
               ) : (
                 todayTasks.map((task, idx) => {
                   const schedule = task.suggested_schedule as any;
+                  const risk = analyzeTaskRisk(task, tasks);
                   return (
                     <motion.div
                       initial={{ opacity: 0, x: -20 }}
@@ -292,7 +362,7 @@ export default function DailyPlannerPage() {
                         </div>
                         
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-1">
+                          <div className="flex flex-wrap items-center gap-3 mb-1">
                             <h4 className="font-bold text-neutral-900">{task.title}</h4>
                             <span className={cn(
                               "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
@@ -302,11 +372,49 @@ export default function DailyPlannerPage() {
                             )}>
                               Điểm: {Math.round(task.ai_priority_score)}
                             </span>
+                            {risk.risk_level !== 'low' && (
+                              <span className={cn(
+                                "text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1",
+                                risk.risk_level === 'high' ? "bg-red-50 text-red-600 border-red-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                              )}>
+                                <AlertCircle className="w-2.5 h-2.5" />
+                                Rủi ro: {risk.risk_level}
+                              </span>
+                            )}
+                            {task.interruption_count > 2 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-red-100 text-red-600 rounded-full border border-red-200 flex items-center gap-1">
+                                <AlertCircle className="w-2.5 h-2.5" />
+                                Nhiệm vụ khó
+                              </span>
+                            )}
+                            {task.is_adjusted && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-600 rounded-full border border-amber-200">
+                                Lên lịch lại (đã điều chỉnh)
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-neutral-500 line-clamp-1">{task.description}</p>
                         </div>
 
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {activeTaskId === task.id ? (
+                            <button 
+                              onClick={() => completeTask(task.id, task.estimated_time)}
+                              className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-xl transition-all border border-green-200"
+                              title="Hoàn thành"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => startTask(task.id)}
+                              disabled={!!activeTaskId}
+                              className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all border border-blue-200 disabled:opacity-50"
+                              title="Bắt đầu Focus"
+                            >
+                              <Play className="w-4 h-4" />
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleBreakdown(task)}
                             disabled={isBreakingDown === task.id}

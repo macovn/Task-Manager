@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import DailyPlannerPage from './pages/DailyPlannerPage';
 import WeeklyPlannerPage from './pages/WeeklyPlannerPage';
 import EisenhowerPage from './pages/EisenhowerPage';
+import FocusOverlay from './components/FocusOverlay';
 import { Loader2 } from 'lucide-react';
 
 const queryClient = new QueryClient();
@@ -27,7 +28,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <FocusOverlay />
+    </>
+  );
 }
 
 export default function App() {

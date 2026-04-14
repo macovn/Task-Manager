@@ -1,5 +1,7 @@
-import { addDays, addMinutes, format, isAfter, isBefore, isSameDay, parseISO, setHours, setMinutes, startOfDay, differenceInDays } from 'date-fns';
+import { addDays, addMinutes, format, isAfter, isBefore, isSameDay, parseISO, setHours, setMinutes, startOfDay, differenceInDays, getHours } from 'date-fns';
 import { Task } from '../../types';
+import { analyzeBehavior } from '../adaptive/behaviorModel';
+import { getAdaptiveAdjustments } from '../adaptive/performanceEngine';
 
 export interface ScheduledTask {
   task_id: string;
@@ -10,11 +12,15 @@ export interface ScheduledTask {
 }
 
 const TIME_BLOCKS = [
-  { start: { h: 7, m: 30 }, end: { h: 12, m: 0 }, energy: 'high' },
-  { start: { h: 13, m: 0 }, end: { h: 16, m: 30 }, energy: 'medium' },
+  { start: { h: 7, m: 30 }, end: { h: 12, m: 0 }, energy: 'high', block: 'morning' },
+  { start: { h: 13, m: 0 }, end: { h: 16, m: 30 }, energy: 'medium', block: 'afternoon' },
 ];
 
 export function generateSchedule(tasks: Task[], startDate: Date = new Date()): ScheduledTask[] {
+  // STEP 0: ADAPTIVE ANALYSIS
+  const insights = analyzeBehavior(tasks);
+  const adjustments = getAdaptiveAdjustments(insights);
+
   // STEP 1: NORMALIZE
   const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'archived');
 
@@ -27,13 +33,25 @@ export function generateSchedule(tasks: Task[], startDate: Date = new Date()): S
     const aIsNear = aDue && differenceInDays(aDue, now) <= 2;
     const bIsNear = bDue && differenceInDays(bDue, now) <= 2;
 
+    // Rescheduled tasks priority
+    if (a.is_rescheduled && !b.is_rescheduled) return -1;
+    if (!a.is_rescheduled && b.is_rescheduled) return 1;
+
     // Deadline Boost
     if (aIsNear && !bIsNear) return -1;
     if (!aIsNear && bIsNear) return 1;
 
-    // AI Score
-    if (b.ai_priority_score !== a.ai_priority_score) {
-      return b.ai_priority_score - a.ai_priority_score;
+    // Behavior Weight: Boost tasks that align with user's best time block
+    // If user is a morning person, boost high-priority tasks even more
+    const aBehaviorBoost = (insights.best_time_block === 'morning' && a.priority === 'high') ? 20 : 0;
+    const bBehaviorBoost = (insights.best_time_block === 'morning' && b.priority === 'high') ? 20 : 0;
+
+    const aScore = a.ai_priority_score + aBehaviorBoost;
+    const bScore = b.ai_priority_score + bBehaviorBoost;
+    
+    // AI Score + Behavior Weight
+    if (bScore !== aScore) {
+      return bScore - aScore;
     }
 
     // Due Date
@@ -53,12 +71,19 @@ export function generateSchedule(tasks: Task[], startDate: Date = new Date()): S
     const day = addDays(currentDay, d);
     
     for (const block of TIME_BLOCKS) {
+      // Boost check: If this block is the user's best block, we might want to prioritize certain tasks here.
+      // For now, we'll just fill it normally but use the adjusted estimates.
+      
       let blockPointer = setMinutes(setHours(day, block.start.h), block.start.m);
       const blockEnd = setMinutes(setHours(day, block.end.h), block.end.m);
 
       while (taskIndex < sortedTasks.length) {
         const task = sortedTasks[taskIndex];
-        const duration = task.estimated_time || 30;
+        
+        // Apply Adaptive Estimate Adjustment
+        const baseDuration = task.estimated_time || 30;
+        const duration = Math.round(baseDuration * adjustments.estimate_multiplier);
+        
         const taskEnd = addMinutes(blockPointer, duration);
 
         if (isBefore(taskEnd, blockEnd) || isSameDay(taskEnd, blockEnd)) {
