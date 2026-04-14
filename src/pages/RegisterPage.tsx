@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Mail, Lock, Loader2, User } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -16,6 +16,7 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
+    const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signUp({
       email,
       password,

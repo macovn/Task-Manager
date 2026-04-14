@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { useAuth } from '../contexts/AuthContext';
 import { calculatePriority } from '../lib/ai/priority';
 import { suggestSchedule } from '../lib/ai/scheduler';
@@ -22,6 +22,7 @@ export interface Task {
 export function useTasks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const supabase = getSupabaseClient();
 
   const { data: tasks = [], isLoading, error } = useQuery({
     queryKey: ['tasks', user?.id],

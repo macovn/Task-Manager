@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTasks, Task } from '../hooks/useTasks';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { getSupabaseClient } from '../lib/supabase/client';
 import { format, isToday, parseISO, addMinutes, setHours, setMinutes } from 'date-fns';
 import { Brain, Clock, Calendar as CalendarIcon, ChevronLeft, Sparkles, Loader2, X, ListChecks, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +24,7 @@ export default function DailyPlannerPage() {
   React.useEffect(() => {
     const fetchProfile = async () => {
       if (!user) return;
+      const supabase = getSupabaseClient();
       const { data } = await supabase
         .from('profiles')
         .select('*')
