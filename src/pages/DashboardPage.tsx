@@ -91,41 +91,39 @@ export default function DashboardPage() {
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-7xl mx-auto space-y-8">
-            {/* Stats */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
-                <div className="grid grid-cols-2 gap-6">
-                  {stats.map((stat, idx) => (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      key={stat.label} 
-                      className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", stat.bg)}>
-                          <stat.icon className={cn("w-6 h-6", stat.color)} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-neutral-500">{stat.label}</p>
-                          <p className="text-2xl font-bold text-neutral-900">{stat.value}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+            {/* Stats - Adjusted to 4 columns on large screens */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {stats.map((stat, idx) => (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  key={stat.label} 
+                  className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", stat.bg)}>
+                      <stat.icon className={cn("w-6 h-6", stat.color)} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-neutral-500">{stat.label}</p>
+                      <p className="text-2xl font-bold text-neutral-900">{stat.value}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
 
-                {/* Active View */}
-                <div className="min-h-[500px]">
-                  {view === 'table' && <TableView />}
-                  {view === 'kanban' && <KanbanBoard />}
-                  {view === 'calendar' && <CalendarView />}
-                </div>
-              </div>
-
-              <div className="lg:col-span-1">
-                <AdaptiveInsights />
+            {/* Active View - Full Width */}
+            <div className="min-h-[500px] space-y-8">
+              {/* Optional: Hidden Insights logic still active in background if needed */}
+              {/* const SHOW_AI_INSIGHTS = false; */}
+              {/* SHOW_AI_INSIGHTS && <div className="hidden"><AdaptiveInsights /></div> */}
+              
+              <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+                {view === 'table' && <TableView />}
+                {view === 'kanban' && <KanbanBoard />}
+                {view === 'calendar' && <CalendarView />}
               </div>
             </div>
           </div>

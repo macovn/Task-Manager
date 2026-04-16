@@ -55,6 +55,10 @@ export const taskService = {
         }
         throw error;
       }
+
+      // Audit Log
+      await this.logAudit(user.id, 'CREATE_TASK', 'task', { taskId: data.id });
+
       return data as Task;
     }
     throw new Error('Failed to create task after multiple attempts to filter missing columns');
@@ -102,6 +106,9 @@ export const taskService = {
         throw error;
       }
       
+      // Audit Log
+      await this.logAudit(user.id, 'UPDATE_TASK', 'task', { taskId: id, updates: Object.keys(updates) });
+
       console.log('Supabase Update Success:', data);
       return data as Task;
     }
@@ -122,6 +129,26 @@ export const taskService = {
       .eq('user_id', user.id);
     
     if (error) throw error;
+
+    // Audit Log
+    await this.logAudit(user.id, 'DELETE_TASK', 'task', { taskId: id });
+  },
+
+  async logAudit(userId: string, action: string, entity: string, metadata: any = {}) {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('audit_logs')
+      .insert([{
+        user_id: userId,
+        action,
+        entity,
+        metadata,
+        timestamp: new Date().toISOString()
+      }]);
+    
+    if (error) {
+      console.warn('Error logging audit (table might be missing):', error.message);
+    }
   },
 
   async logEvent(event: { task_id: string; user_id: string; event_type: string; value: any }) {

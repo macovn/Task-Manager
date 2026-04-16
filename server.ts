@@ -6,17 +6,40 @@ import cors from 'cors';
 import cron from 'node-cron';
 import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
+import { JSDOM } from 'jsdom';
+import createDOMPurify from 'dompurify';
 import { runDailyPlannerJob } from './jobs/dailyPlanner';
 import { calculatePriority } from './src/lib/ai/gemini';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const window = new JSDOM('').window;
+const DOMPurify = createDOMPurify(window as any);
+
 // Initialize Supabase for Auth verification
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
+
+// Helper for audit logging
+const logAudit = async (userId: string, action: string, entity: string, metadata: any = {}) => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('audit_logs')
+      .insert([{
+        user_id: userId,
+        action,
+        entity,
+        metadata,
+        timestamp: new Date().toISOString()
+      }]);
+    if (error) console.warn('[Audit Log Error]', error.message);
+  } catch (err) {
+    console.error('[Audit Log Critical Error]', err);
+  }
+};
 
 // Middleware to verify Supabase JWT
 const requireAuth = async (req: any, res: any, next: any) => {
@@ -34,10 +57,15 @@ const requireAuth = async (req: any, res: any, next: any) => {
   next();
 };
 
-// Rate limiter for AI endpoints
+// Rate limiter for AI endpoints - Combined User ID + IP
 const aiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each IP to 50 requests per window
+  max: 50,
+  keyGenerator: (req: any) => {
+    const userId = req.user?.id || 'anonymous';
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    return `${userId}-${ip}`;
+  },
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -73,6 +101,9 @@ async function startServer() {
   app.post('/api/ai/score', requireAuth, aiLimiter, async (req: any, res) => {
     const { task, delayFactor } = req.body;
     console.log(`[Server AI] Scoring task: ${task.title} for user: ${req.user.id}`);
+    
+    await logAudit(req.user.id, 'AI_SCORE', 'task', { taskId: task.id });
+
     try {
       const scoreData = await calculatePriority(task, delayFactor);
       res.json(scoreData);
@@ -85,6 +116,9 @@ async function startServer() {
   app.post('/api/ai/plan', requireAuth, aiLimiter, async (req: any, res) => {
     const { tasks } = req.body;
     console.log(`[Server AI] Planning ${tasks.length} tasks for user: ${req.user.id}`);
+    
+    await logAudit(req.user.id, 'AI_PLAN', 'tasks', { count: tasks.length });
+
     try {
       const { generateDailyPlan } = await import('./src/lib/ai/gemini');
       const plan = await generateDailyPlan(tasks);
@@ -98,6 +132,9 @@ async function startServer() {
   app.post('/api/ai/breakdown', requireAuth, aiLimiter, async (req: any, res) => {
     const { title } = req.body;
     console.log(`[Server AI] Breaking down: ${title} for user: ${req.user.id}`);
+    
+    await logAudit(req.user.id, 'AI_BREAKDOWN', 'task', { title });
+
     try {
       const { generateSubtasks } = await import('./src/lib/ai/gemini');
       const subtasks = await generateSubtasks(title);
@@ -111,6 +148,9 @@ async function startServer() {
   app.post('/api/ai/eisenhower-action', requireAuth, aiLimiter, async (req: any, res) => {
     const { task, quadrant } = req.body;
     console.log(`[Server AI] Eisenhower action for: ${task.title} for user: ${req.user.id}`);
+    
+    await logAudit(req.user.id, 'AI_EISENHOWER', 'task', { taskId: task.id, quadrant });
+
     try {
       const { getEisenhowerActionSuggestion } = await import('./src/lib/ai/gemini');
       const suggestion = await getEisenhowerActionSuggestion(task, quadrant);
