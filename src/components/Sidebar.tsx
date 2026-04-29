@@ -11,14 +11,16 @@ import {
   Brain,
   CalendarDays,
   Grid2X2,
-  Timer
+  Timer,
+  Settings,
+  Repeat
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFocusStore } from '../store/useFocusStore';
 
 export default function Sidebar() {
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { view, setView } = useUIStore();
   const { activeTaskId } = useFocusStore();
   const navigate = useNavigate();
@@ -27,6 +29,7 @@ export default function Sidebar() {
   const isPlanner = location.pathname.startsWith('/planner');
   const isEisenhower = location.pathname === '/eisenhower';
   const isDashboard = location.pathname === '/dashboard';
+  const isAdmin = location.pathname.startsWith('/admin');
 
   return (
     <aside className="w-full md:w-64 bg-white border-r border-neutral-200 flex flex-col h-screen sticky top-0">
@@ -126,6 +129,32 @@ export default function Sidebar() {
             Chế độ tập trung
           </button>
         </div>
+
+        {profile?.role === 'admin' && (
+          <div className="pt-4 pb-2">
+            <p className="px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Hệ thống</p>
+            <button 
+              onClick={() => navigate('/admin/users')}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium",
+                location.pathname === '/admin/users' ? "bg-red-50 text-red-600" : "text-neutral-500 hover:bg-neutral-50"
+              )}
+            >
+              <Settings className="w-5 h-5" />
+              Quản lý người dùng
+            </button>
+            <button 
+              onClick={() => navigate('/admin/task-templates')}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium",
+                location.pathname === '/admin/task-templates' ? "bg-red-50 text-red-600" : "text-neutral-500 hover:bg-neutral-50"
+              )}
+            >
+              <Repeat className="w-5 h-5" />
+              Mẫu nhiệm vụ định kỳ
+            </button>
+          </div>
+        )}
       </nav>
 
       <div className="p-4 border-t border-neutral-100">

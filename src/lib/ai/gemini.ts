@@ -1,14 +1,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { getSupabaseClient } from '../supabase/client';
 
 let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (aiInstance) return aiInstance;
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("GEMINI_API_KEY is missing. AI features will not work.");
+  // Stricter check for valid looking API key
+  if (!apiKey || apiKey === 'undefined' || apiKey === 'null' || apiKey.length < 10) {
+    return null;
   }
-  aiInstance = new GoogleGenAI({ apiKey: apiKey || "dummy-key" });
+  aiInstance = new GoogleGenAI({ apiKey });
   return aiInstance;
 }
 
@@ -27,7 +29,8 @@ export async function calculatePriority(task: any, delayFactor: number = 1.0): P
   // Client-side: Call the server API
   console.log(`[AI] Requesting score for: ${task.title}`);
   try {
-    const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
     const response = await fetch('/api/ai/score', {
@@ -53,6 +56,7 @@ export async function calculatePriority(task: any, delayFactor: number = 1.0): P
 async function calculatePriorityInternal(task: any, delayFactor: number = 1.0) {
   try {
     const ai = getAI();
+    if (!ai) return calculatePriorityRuleBased(task, delayFactor);
     const prompt = `
       Phân tích nhiệm vụ sau và gán điểm ưu tiên từ 0 đến 100.
       Điểm cao hơn có nghĩa là độ khẩn cấp và quan trọng cao hơn.
@@ -79,7 +83,7 @@ async function calculatePriorityInternal(task: any, delayFactor: number = 1.0) {
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: prompt,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -95,16 +99,19 @@ async function calculatePriorityInternal(task: any, delayFactor: number = 1.0) {
       },
     });
 
-    const result = JSON.parse(response.text || '{"score": 50}');
-    return Math.min(Math.max(result.score, 0), 100);
-  } catch (error) {
-    console.error("AI Priority Calculation failed, falling back to rule-based:", error);
+    const text = response.text;
+    const parsed = JSON.parse(text || '{"score": 50}');
+    return Math.min(Math.max(parsed.score, 0), 100);
+  } catch (error: any) {
+    // Only log if it's not an auth error, otherwise it's just distracting
+    if (!error?.message?.includes('API key not valid') && !error?.message?.includes('400')) {
+      console.error("AI Priority Calculation failed:", error.message);
+    }
     return calculatePriorityRuleBased(task, delayFactor);
   }
 }
 
 function calculatePriorityRuleBased(task: any, delayFactor: number = 1.0) {
-  console.log("AI SCORE SOURCE: Fallback Rule-based");
   const now = new Date();
   if (!task.due_date) {
     return 50 * delayFactor;
@@ -128,7 +135,8 @@ function calculatePriorityRuleBased(task: any, delayFactor: number = 1.0) {
 export async function generateSubtasks(taskTitle: string) {
   if (!isServer) {
     try {
-      const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
       const response = await fetch('/api/ai/breakdown', {
@@ -151,7 +159,7 @@ export async function generateSubtasks(taskTitle: string) {
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Chia nhỏ nhiệm vụ "${taskTitle}" thành 3-5 nhiệm vụ con có thể thực hiện được.`,
+      contents: [{ role: 'user', parts: [{ text: `Chia nhỏ nhiệm vụ "${taskTitle}" thành 3-5 nhiệm vụ con có thể thực hiện được.` }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -181,7 +189,8 @@ export async function generateSubtasks(taskTitle: string) {
 export async function generateDailyPlan(tasks: any[]) {
   if (!isServer) {
     try {
-      const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
       const response = await fetch('/api/ai/plan', {
@@ -206,11 +215,11 @@ export async function generateDailyPlan(tasks: any[]) {
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Bạn là một chuyên gia lập kế hoạch thông minh. Hãy sắp xếp các nhiệm vụ sau vào một lịch trình phân bổ thời gian hợp lý cho hôm nay, bắt đầu từ 9 giờ sáng. 
+      contents: [{ role: 'user', parts: [{ text: `Bạn là một chuyên gia lập kế hoạch thông minh. Hãy sắp xếp các nhiệm vụ sau vào một lịch trình phân bổ thời gian hợp lý cho hôm nay, bắt đầu từ 9 giờ sáng. 
       Trả về thời gian bắt đầu và kết thúc theo định dạng ISO 8601 cho ngày hôm nay (${new Date().toISOString().split('T')[0]}).
       
       Nhiệm vụ:
-      ${taskSummary}`,
+      ${taskSummary}` }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -260,7 +269,8 @@ function getEisenhowerFallback(quadrant: string) {
 export async function getEisenhowerActionSuggestion(task: any, quadrant: string) {
   if (!isServer) {
     try {
-      const session = JSON.parse(localStorage.getItem('sb-nafd5etbso5ymzanylmrdq-auth-token') || '{}');
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
       const controller = new AbortController();
@@ -289,14 +299,14 @@ export async function getEisenhowerActionSuggestion(task: any, quadrant: string)
     // Timeout wrapper for Gemini call
     const aiCall = ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Bạn là một chuyên gia về năng suất. Với một nhiệm vụ trong ô "${quadrant}" của Ma trận Eisenhower, hãy đề xuất một hành động cụ thể và giải thích lý do.
+      contents: [{ role: 'user', parts: [{ text: `Bạn là một chuyên gia về năng suất. Với một nhiệm vụ trong ô "${quadrant}" của Ma trận Eisenhower, hãy đề xuất một hành động cụ thể và giải thích lý do.
       
       Nhiệm vụ: ${task.title}
       Mô tả: ${task.description || 'N/A'}
       Ưu tiên: ${task.priority}
       Hạn chót: ${task.due_date || 'N/A'}
       
-      Trả về một đối tượng JSON với "action" (chuỗi ngắn) và "explanation" (1 câu).`,
+      Trả về một đối tượng JSON với "action" (chuỗi ngắn) và "explanation" (1 câu).` }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {

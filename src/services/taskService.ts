@@ -5,133 +5,134 @@ import { sanitizeInput } from '../lib/utils';
 export const taskService = {
   async fetchTasks() {
     const supabase = getSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (!user) throw new Error('Unauthorized');
+    if (!session) throw new Error('Unauthorized');
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data as Task[];
+    // 1. Fetch tasks from API
+    const response = await fetch('/api/tasks', {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch tasks');
+    }
+
+    const tasks = await response.json();
+    if (!tasks || tasks.length === 0) return [];
+
+    // 2. Fetch all users from the API (for joining)
+    let profileMap = new Map();
+    try {
+      const usersResponse = await fetch('/api/users', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      
+      if (usersResponse.ok) {
+        const users = await usersResponse.json();
+        profileMap = new Map(users.map((u: any) => [u.id, u]));
+      }
+    } catch (err) {
+      console.warn('[fetchTasks] Error fetching users for join:', err);
+    }
+
+    const tasksWithAssignee = tasks.map((task: any) => {
+      const profile = task.assignee_id ? profileMap.get(task.assignee_id) : null;
+      
+      // Decode is_key and key_type from tags if missing as columns
+      let is_key = !!task.is_key;
+      let key_type = task.key_type;
+      
+      if (task.tags && Array.isArray(task.tags)) {
+        if (task.tags.includes('system:key:true')) {
+          is_key = true;
+        }
+        const typeTag = task.tags.find((t: string) => t.startsWith('system:key:type:'));
+        if (typeTag) {
+          key_type = typeTag.replace('system:key:type:', '') as any;
+        }
+      }
+
+      return {
+        ...task,
+        is_key,
+        key_type,
+        assignee: profile ? {
+          id: profile.id,
+          full_name: profile.full_name || null,
+          role: profile.role || null,
+          email: profile.email || null
+        } : null
+      };
+    });
+
+    return tasksWithAssignee as Task[];
   },
 
   async createTask(task: Partial<Task>) {
     const supabase = getSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) throw new Error('Unauthorized');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Unauthorized');
 
-    let currentTask = { 
-      ...task,
-      user_id: user.id,
-      title: sanitizeInput(task.title || ''),
-      description: sanitizeInput(task.description || '')
-    };
-    
-    let attempt = 0;
-    const maxAttempts = 10;
+    const response = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(task)
+    });
 
-    while (attempt < maxAttempts) {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([currentTask])
-        .select()
-        .single();
-      
-      if (error) {
-        if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
-          const match = error.message.match(/column "(.+)" of relation "tasks" does not exist/);
-          if (match && match[1]) {
-            const missingColumn = match[1];
-            console.warn(`Column ${missingColumn} missing in DB. Removing from insert payload.`);
-            delete (currentTask as any)[missingColumn];
-            attempt++;
-            continue;
-          }
-        }
-        throw error;
-      }
-
-      // Audit Log
-      await this.logAudit(user.id, 'CREATE_TASK', 'task', { taskId: data.id });
-
-      return data as Task;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create task');
     }
-    throw new Error('Failed to create task after multiple attempts to filter missing columns');
+
+    return await response.json() as Task;
   },
 
   async updateTask(id: string, updates: Partial<Task>) {
     const supabase = getSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) throw new Error('Unauthorized');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Unauthorized');
 
-    console.log('Supabase Update Request:', { id, updates });
-    
-    let currentUpdates = { ...updates };
-    
-    if (updates.title !== undefined) currentUpdates.title = sanitizeInput(updates.title);
-    if (updates.description !== undefined) currentUpdates.description = sanitizeInput(updates.description);
+    const response = await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(updates)
+    });
 
-    let attempt = 0;
-    const maxAttempts = 10;
-
-    while (attempt < maxAttempts) {
-      const { data, error } = await supabase
-        .from('tasks')
-        .update(currentUpdates)
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .select()
-        .single();
-      
-      if (error) {
-        // Handle "column does not exist" error
-        if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
-          const match = error.message.match(/column tasks\.(.+) does not exist/);
-          if (match && match[1]) {
-            const missingColumn = match[1];
-            console.warn(`Column ${missingColumn} missing in DB. Removing from update payload.`);
-            delete (currentUpdates as any)[missingColumn];
-            attempt++;
-            continue;
-          }
-        }
-        
-        console.error('Supabase Update Error:', error);
-        throw error;
-      }
-      
-      // Audit Log
-      await this.logAudit(user.id, 'UPDATE_TASK', 'task', { taskId: id, updates: Object.keys(updates) });
-
-      console.log('Supabase Update Success:', data);
-      return data as Task;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update task');
     }
-    
-    throw new Error('Failed to update task after multiple attempts to filter missing columns');
+
+    return await response.json() as Task;
   },
 
   async deleteTask(id: string) {
     const supabase = getSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) throw new Error('Unauthorized');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Unauthorized');
 
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
-    
-    if (error) throw error;
+    const response = await fetch(`/api/tasks/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    });
 
-    // Audit Log
-    await this.logAudit(user.id, 'DELETE_TASK', 'task', { taskId: id });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete task');
+    }
   },
 
   async logAudit(userId: string, action: string, entity: string, metadata: any = {}) {

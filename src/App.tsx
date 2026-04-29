@@ -8,6 +8,8 @@ import DashboardPage from './pages/DashboardPage';
 import DailyPlannerPage from './pages/DailyPlannerPage';
 import WeeklyPlannerPage from './pages/WeeklyPlannerPage';
 import EisenhowerPage from './pages/EisenhowerPage';
+import AdminUserPage from './pages/AdminUserPage';
+import AdminTemplatePage from './pages/AdminTemplatePage';
 import FocusOverlay from './components/FocusOverlay';
 import { Loader2 } from 'lucide-react';
 
@@ -73,6 +75,22 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <EisenhowerPage />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/admin/users" 
+              element={
+                <PrivateRoute>
+                  <AdminUserPage />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/admin/task-templates" 
+              element={
+                <PrivateRoute>
+                  <AdminTemplatePage />
                 </PrivateRoute>
               } 
             />

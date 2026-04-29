@@ -35,6 +35,7 @@ export default function TableView() {
   // Filters & Sorting State
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [keyFilter, setKeyFilter] = useState<'all' | 'month' | 'quarter'>('all');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Task | 'priority_val'; direction: 'asc' | 'desc' }>({ 
     key: 'ai_priority_score', 
     direction: 'desc' 
@@ -53,6 +54,11 @@ export default function TableView() {
     // Filter by Priority
     if (priorityFilter !== 'all') {
       result = result.filter(t => t.priority === priorityFilter);
+    }
+
+    // Filter by Key Task
+    if (keyFilter !== 'all') {
+      result = result.filter(t => t.is_key && t.key_type === keyFilter);
     }
 
     // Filter by Date Range
@@ -87,7 +93,7 @@ export default function TableView() {
     });
 
     return result;
-  }, [tasks, statusFilter, priorityFilter, sortConfig, startDate, endDate]);
+  }, [tasks, statusFilter, priorityFilter, keyFilter, sortConfig, startDate, endDate]);
 
   const toggleSort = (key: keyof Task | 'priority_val') => {
     setSortConfig(prev => ({
@@ -99,6 +105,7 @@ export default function TableView() {
   const clearFilters = () => {
     setStatusFilter('all');
     setPriorityFilter('all');
+    setKeyFilter('all');
     setStartDate('');
     setEndDate('');
   };
@@ -141,6 +148,16 @@ export default function TableView() {
             <option value="low">Low</option>
           </select>
 
+          <select 
+            value={keyFilter}
+            onChange={(e) => setKeyFilter(e.target.value as any)}
+            className="text-sm font-bold bg-neutral-50 border-none rounded-lg focus:ring-2 focus:ring-orange-500 py-1.5 pl-2 pr-8 outline-none"
+          >
+            <option value="all">Tất cả nhiệm vụ</option>
+            <option value="month">Trọng tâm tháng</option>
+            <option value="quarter">Trọng tâm quý</option>
+          </select>
+
           <div className="flex items-center gap-2 bg-neutral-50 rounded-lg px-2 py-1 border border-neutral-100">
             <Calendar className="w-4 h-4 text-neutral-400" />
             <input 
@@ -158,7 +175,7 @@ export default function TableView() {
             />
           </div>
 
-          {(statusFilter !== 'all' || priorityFilter !== 'all' || startDate || endDate) && (
+          {(statusFilter !== 'all' || priorityFilter !== 'all' || keyFilter !== 'all' || startDate || endDate) && (
             <button 
               onClick={clearFilters}
               className="text-xs font-bold text-blue-600 hover:text-blue-700 underline underline-offset-4"
@@ -195,6 +212,7 @@ export default function TableView() {
                     AI Score <ArrowUpDown className="w-3 h-3" />
                   </button>
                 </th>
+                <th className="px-6 py-4 text-xs font-bold text-neutral-500 uppercase tracking-wider">Người thực hiện</th>
                 <th className="px-6 py-4 text-xs font-bold text-neutral-500 uppercase tracking-wider">Energy</th>
                 <th className="px-6 py-4 text-xs font-bold text-neutral-500 uppercase tracking-wider">
                   <button onClick={() => toggleSort('due_date')} className="flex items-center gap-1 hover:text-neutral-900 transition-colors">
@@ -222,6 +240,12 @@ export default function TableView() {
                             {task.title}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {task.is_key && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-md border border-orange-200">
+                                <Zap className="w-2.5 h-2.5" />
+                                {task.key_type === 'month' ? 'Trọng tâm tháng' : 'Trọng tâm quý'}
+                              </span>
+                            )}
                             {risk.risk_level !== 'low' && (
                               <span className={cn(
                                 "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md",
@@ -297,6 +321,17 @@ export default function TableView() {
                           />
                         </div>
                         <span className="text-xs font-bold text-neutral-600">{Math.round(task.ai_priority_score)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-200">
+                          {task.assignee?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 
+                           task.assignee?.email?.slice(0, 2).toUpperCase() || '??'}
+                        </div>
+                        <span className="text-sm font-medium text-neutral-700">
+                          {task.assignee?.full_name || task.assignee?.email || 'Chưa bàn giao'}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">

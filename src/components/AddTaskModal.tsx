@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCreateTask } from '../lib/hooks/useCreateTask';
 import { useUpdateTask } from '../lib/hooks/useUpdateTask';
-import { Task } from '../types';
-import { X, Loader2, Tag as TagIcon, Plus } from 'lucide-react';
+import { Task, UserProfile } from '../types';
+import { X, Loader2, Plus, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../contexts/AuthContext';
+import { canAssign } from '../lib/rbac';
 
 interface AddTaskModalProps {
   isOpen: boolean;
@@ -12,6 +14,7 @@ interface AddTaskModalProps {
 }
 
 export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskModalProps) {
+  const { user, session, profile } = useAuth();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   
@@ -22,10 +25,34 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
   const [startDate, setStartDate] = useState('');
   const [estimatedTime, setEstimatedTime] = useState('30');
   const [energyLevel, setEnergyLevel] = useState<Task['energy_level']>('medium');
+  const [isKey, setIsKey] = useState(false);
+  const [keyType, setKeyType] = useState<'month' | 'quarter'>('month');
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
+  
+  const [assigneeId, setAssigneeId] = useState<string>('');
+  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!isOpen || !session) return;
+
+    // Fetch all profiles for assignee list
+    fetch('/api/users', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+      // Ensure data is an array
+      const profilesData = Array.isArray(data) ? data : [];
+      setAllProfiles(profilesData);
+    })
+    .catch(err => {
+      console.error('Failed to fetch users:', err);
+      setAllProfiles([]);
+    });
+  }, [isOpen, session]);
+
+  useEffect(() => {
     if (initialData) {
       setTitle(initialData.title);
       setDescription(initialData.description || '');
@@ -34,7 +61,10 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
       setStartDate(initialData.start_date ? initialData.start_date.split('T')[0] : '');
       setEstimatedTime(initialData.estimated_time.toString());
       setEnergyLevel(initialData.energy_level || 'medium');
+      setIsKey(initialData.is_key || false);
+      setKeyType(initialData.key_type || 'month');
       setTags(initialData.tags || []);
+      setAssigneeId(initialData.assignee_id || user?.id || '');
     } else {
       setTitle('');
       setDescription('');
@@ -43,9 +73,32 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
       setStartDate('');
       setEstimatedTime('30');
       setEnergyLevel('medium');
+      setIsKey(false);
+      setKeyType('month');
       setTags([]);
+      setAssigneeId(user?.id || '');
     }
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, user]);
+
+  const [assignableProfiles, setAssignableProfiles] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    if (!profile || !allProfiles.length) return;
+    
+    console.log('Filtering assignable users for role:', profile.role);
+    console.log('Current user profile:', profile);
+    console.log('All available profiles:', allProfiles);
+
+    const filtered = allProfiles.filter(p => {
+      const isSelf = p.id === profile.id;
+      const allowed = canAssign(profile.role, p.role, isSelf);
+      if (isSelf) console.log(`Checking self assignment for ${p.email}: ${allowed}`);
+      return allowed;
+    });
+
+    console.log('Assignable users count:', filtered.length);
+    setAssignableProfiles(filtered);
+  }, [profile, allProfiles]);
 
   const handleAddTag = () => {
     if (newTag && !tags.includes(newTag)) {
@@ -68,22 +121,29 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
       start_date: startDate ? new Date(startDate).toISOString() : null,
       estimated_time: parseInt(estimatedTime),
       energy_level: energyLevel,
-      tags
+      tags,
+      assignee_id: assigneeId,
+      is_key: isKey,
+      key_type: isKey ? keyType : null
     };
 
-    if (initialData) {
-      await updateTask.mutateAsync({
-        id: initialData.id,
-        ...taskData,
-      });
-    } else {
-      await createTask.mutateAsync({
-        ...taskData,
-        status: 'todo'
-      });
+    try {
+      if (initialData) {
+        await updateTask.mutateAsync({
+          id: initialData.id,
+          ...taskData,
+        });
+      } else {
+        await createTask.mutateAsync({
+          ...taskData,
+          status: 'todo'
+        });
+      }
+      onClose();
+    } catch (err: any) {
+      console.error('Task Submission Error:', err);
+      alert(`Lỗi: ${err.message || 'Không thể lưu nhiệm vụ'}`);
     }
-    
-    onClose();
   };
 
   const isPending = createTask.isPending || updateTask.isPending;
@@ -108,6 +168,28 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-sm font-bold text-neutral-700 mb-1.5">Giao cho (Assignee)</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <select
+                    value={assigneeId}
+                    onChange={(e) => setAssigneeId(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                  >
+                    <option value="">Chọn người thực hiện</option>
+                    {assignableProfiles.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.id === user?.id ? 'Bản thân' : `${p.full_name || p.email || p.id.substring(0, 8)} (${p.role})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {assignableProfiles.length === 0 && (
+                  <p className="text-[10px] text-red-500 mt-1">Bạn không có quyền giao việc cho bất kỳ ai (bao gồm bản thân).</p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-bold text-neutral-700 mb-1.5">Tiêu đề nhiệm vụ</label>
                 <input
@@ -145,7 +227,7 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-neutral-700 mb-1.5">Mức năng lượng</label>
-                  <select
+                   <select
                     value={energyLevel || 'medium'}
                     onChange={(e) => setEnergyLevel(e.target.value as Task['energy_level'])}
                     className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -189,6 +271,51 @@ export default function AddTaskModal({ isOpen, onClose, initialData }: AddTaskMo
                   className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="vd: 30, 60, 120"
                 />
+              </div>
+
+              <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="isKey"
+                    checked={isKey}
+                    onChange={(e) => setIsKey(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded border-neutral-300 focus:ring-blue-500"
+                  />
+                  <label htmlFor="isKey" className="text-sm font-bold text-neutral-700 cursor-pointer flex items-center gap-1.5">
+                    🔥 Nhiệm vụ trọng tâm
+                  </label>
+                </div>
+
+                {isKey && (
+                  <div className="pl-7">
+                    <label className="block text-xs font-bold text-neutral-500 mb-1.5 uppercase tracking-wider">Phân loại trọng tâm</label>
+                    <div className="flex gap-2">
+                       <button
+                        type="button"
+                        onClick={() => setKeyType('month')}
+                        className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          keyType === 'month' 
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                            : 'bg-white border-neutral-200 text-neutral-600 hover:border-blue-300'
+                        }`}
+                      >
+                        Tháng
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKeyType('quarter')}
+                        className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          keyType === 'quarter' 
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                            : 'bg-white border-neutral-200 text-neutral-600 hover:border-blue-300'
+                        }`}
+                      >
+                        Quý
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

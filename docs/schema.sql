@@ -51,11 +51,27 @@ ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
 -- Create profiles table to track AI status and patterns
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT,
+  role TEXT DEFAULT 'nhan_vien' CHECK (role IN ('admin', 'giam_doc', 'pho_giam_doc', 'truong_phong', 'pho_truong_phong', 'nhan_vien')),
   last_ai_plan_at TIMESTAMP WITH TIME ZONE,
   preferred_working_hours JSONB DEFAULT '{"start": 9, "end": 17}',
   productivity_score FLOAT DEFAULT 1.0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Trigger to create profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, role)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', 'nhan_vien');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Create task_events table for behavior tracking
 CREATE TABLE task_events (
