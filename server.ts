@@ -20,9 +20,12 @@ const window = new JSDOM('').window;
 const DOMPurify = createDOMPurify(window as any);
 
 // Initialize Supabase for Auth verification
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  supabaseUrl,
+  supabaseServiceKey
 );
 
 // Helper for audit logging
@@ -424,19 +427,40 @@ async function startServer() {
       
       if (error && error.code === 'PGRST116') {
         // Self-healing: Profile missing, create it
-        const { data: newProfile, error: createError } = await supabaseAdmin
-          .from('profiles')
-          .insert([{ 
-            id: req.user.id, 
-            role: 'nhan_vien', 
-            full_name: req.user.user_metadata?.full_name || '',
-            email: req.user.email
-          }])
-          .select()
-          .single();
+        const newProfileData: any = { 
+          id: req.user.id, 
+          role: 'nhan_vien', 
+          full_name: req.user.user_metadata?.full_name || ''
+        };
         
-        if (createError) throw createError;
-        profile = newProfile;
+        // Only add email if it's likely to exist in schema (resilience)
+        // We try to insert with email first, but we handle it
+        try {
+          const { data: newProfile, error: createError } = await supabaseAdmin
+            .from('profiles')
+            .insert([{ ...newProfileData, email: req.user.email }])
+            .select()
+            .single();
+          
+          if (createError) {
+             // If error is about missing column, try without email
+             if (createError.message.includes('column "email" of relation "profiles" does not exist')) {
+               const { data: fallbackProfile, error: fallbackError } = await supabaseAdmin
+                 .from('profiles')
+                 .insert([newProfileData])
+                 .select()
+                 .single();
+               if (fallbackError) throw fallbackError;
+               profile = fallbackProfile;
+             } else {
+               throw createError;
+             }
+          } else {
+            profile = newProfile;
+          }
+        } catch (innerErr) {
+          throw innerErr;
+        }
       } else if (error) {
         throw error;
       }
@@ -457,11 +481,14 @@ async function startServer() {
         .from('profiles')
         .select('*');
       
-      if (error) throw error;
+      if (error) {
+        console.error('[Users List Supabase Error]', error);
+        throw error;
+      }
       res.json(profiles);
     } catch (error: any) {
-      console.error('[Users List Error]', error);
-      res.status(500).json({ error: 'Failed to fetch users' });
+      console.error('[Users List Route Error]', error);
+      res.status(500).json({ error: 'Failed to fetch users', details: error.message });
     }
   });
 
@@ -539,21 +566,29 @@ async function startServer() {
       const profileUpdates: any = {};
       if (role) profileUpdates.role = role;
       if (full_name !== undefined) profileUpdates.full_name = full_name;
-      if (email) profileUpdates.email = email;
 
-      const { data, error } = await supabaseAdmin
-        .from('profiles')
-        .upsert({ id, ...profileUpdates })
-        .select()
-        .single();
+      const updateData = { id, ...profileUpdates };
+      let finalData = null;
 
-      if (error) {
-        console.error('[Admin Update User Error] DB Upsert failed:', error);
-        return res.status(500).json({ error: error.message });
+      if (email) {
+        const { data, error: upsertError } = await supabaseAdmin.from('profiles').upsert({ ...updateData, email }).select().single();
+        if (upsertError && upsertError.message.includes('column "email" of relation "profiles" does not exist')) {
+          const { data: fallbackData, error: fallbackError } = await supabaseAdmin.from('profiles').upsert(updateData).select().single();
+          if (fallbackError) return res.status(500).json({ error: fallbackError.message });
+          finalData = fallbackData;
+        } else if (upsertError) {
+          return res.status(500).json({ error: upsertError.message });
+        } else {
+          finalData = data;
+        }
+      } else {
+        const { data, error } = await supabaseAdmin.from('profiles').upsert(updateData).select().single();
+        if (error) return res.status(500).json({ error: error.message });
+        finalData = data;
       }
 
       await logAudit(req.user.id, 'ADMIN_UPDATE_USER', 'user', { targetId: id, updates: profileUpdates });
-      res.json(data);
+      res.json(finalData);
     } catch (error: any) {
       console.error('[Admin Update User Critical] Exception:', error);
       res.status(500).json({ error: error.message });
