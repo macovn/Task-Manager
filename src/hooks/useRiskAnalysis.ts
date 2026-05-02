@@ -30,9 +30,13 @@ export function useRiskAnalysis() {
     // Count overloaded days
     const dayMinutes: Record<string, number> = {};
     tasks.forEach(t => {
-      if (t.suggested_schedule && t.status !== 'done') {
-        const day = format(parseISO(t.suggested_schedule.start), 'yyyy-MM-dd');
-        dayMinutes[day] = (dayMinutes[day] || 0) + (t.estimated_time || 0);
+      if (t.suggested_schedule?.start && t.status !== 'done') {
+        try {
+          const day = format(parseISO(t.suggested_schedule.start), 'yyyy-MM-dd');
+          dayMinutes[day] = (dayMinutes[day] || 0) + (t.estimated_time || 0);
+        } catch (e) {
+          console.warn("Skipping invalid task schedule in risk analysis", t.id);
+        }
       }
     });
     
