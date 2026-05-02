@@ -23,26 +23,7 @@ export const taskService = {
     const tasks = await response.json();
     if (!tasks || tasks.length === 0) return [];
 
-    // 2. Fetch all users from the API (for joining)
-    let profileMap = new Map();
-    try {
-      const usersResponse = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-      
-      if (usersResponse.ok) {
-        const users = await usersResponse.json();
-        profileMap = new Map(users.map((u: any) => [u.id, u]));
-      }
-    } catch (err) {
-      console.warn('[fetchTasks] Error fetching users for join:', err);
-    }
-
-    const tasksWithAssignee = tasks.map((task: any) => {
-      const profile = task.assignee_id ? profileMap.get(task.assignee_id) : null;
-      
+    const tasksMapped = tasks.map((task: any) => {
       // Decode is_key and key_type from tags if missing as columns
       let is_key = !!task.is_key;
       let key_type = task.key_type;
@@ -61,16 +42,16 @@ export const taskService = {
         ...task,
         is_key,
         key_type,
-        assignee: profile ? {
-          id: profile.id,
-          full_name: profile.full_name || null,
-          role: profile.role || null,
-          email: profile.email || null
+        // Assignee is already joined by server as { full_name, role }
+        // We ensure it has the expected structure
+        assignee: task.assignee ? {
+          full_name: task.assignee.full_name || null,
+          role: task.assignee.role || null
         } : null
       };
     });
 
-    return tasksWithAssignee as Task[];
+    return tasksMapped as Task[];
   },
 
   async createTask(task: Partial<Task>) {

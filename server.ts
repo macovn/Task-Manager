@@ -265,17 +265,43 @@ async function startServer() {
   app.get('/api/tasks', requireAuth, async (req: any, res) => {
     const userId = req.user.id;
     try {
-      const { data: tasks, error } = await supabaseAdmin
-        .from('tasks')
-        .select('*')
-        .or(`user_id.eq.${userId},assignee_id.eq.${userId}`)
-        .order('created_at', { ascending: false });
+      // 1. Get user profile to check role
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
       
-      if (error) throw error;
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('[Get Profile Error]', profileError);
+      }
+
+      const isAdmin = profile?.role === 'admin';
+
+      // 2. Build Query
+      let query = supabaseAdmin.from('tasks').select('*');
+
+      // Admin sees everything, others see only theirs
+      if (!isAdmin) {
+        query = query.or(`user_id.eq.${userId},assignee_id.eq.${userId}`);
+      }
+
+      const { data: tasks, error: tasksError } = await query.order('created_at', { ascending: false });
+      
+      if (tasksError) {
+        console.error('[Tasks Query Error]', tasksError);
+        throw tasksError;
+      }
+
+      if (!tasks) return res.json([]);
+      
       res.json(tasks);
     } catch (error: any) {
-      console.error('[Fetch Tasks Error]', error);
-      res.status(500).json({ error: 'Không thể lấy danh sách nhiệm vụ' });
+      console.error('[CRITICAL - /api/tasks Error]', error);
+      res.status(500).json({ 
+        error: 'Lỗi hệ thống khi lấy danh sách nhiệm vụ',
+        details: error.message || String(error)
+      });
     }
   });
 
@@ -427,40 +453,21 @@ async function startServer() {
       
       if (error && error.code === 'PGRST116') {
         // Self-healing: Profile missing, create it
-        const newProfileData: any = { 
+        const isDefaultAdmin = req.user.email === 'macovn@gmail.com';
+        const newProfileData = { 
           id: req.user.id, 
-          role: 'nhan_vien', 
+          role: isDefaultAdmin ? 'admin' : 'nhan_vien', 
           full_name: req.user.user_metadata?.full_name || ''
         };
         
-        // Only add email if it's likely to exist in schema (resilience)
-        // We try to insert with email first, but we handle it
-        try {
-          const { data: newProfile, error: createError } = await supabaseAdmin
-            .from('profiles')
-            .insert([{ ...newProfileData, email: req.user.email }])
-            .select()
-            .single();
-          
-          if (createError) {
-             // If error is about missing column, try without email
-             if (createError.message.includes('column "email" of relation "profiles" does not exist')) {
-               const { data: fallbackProfile, error: fallbackError } = await supabaseAdmin
-                 .from('profiles')
-                 .insert([newProfileData])
-                 .select()
-                 .single();
-               if (fallbackError) throw fallbackError;
-               profile = fallbackProfile;
-             } else {
-               throw createError;
-             }
-          } else {
-            profile = newProfile;
-          }
-        } catch (innerErr) {
-          throw innerErr;
-        }
+        const { data: newProfile, error: createError } = await supabaseAdmin
+          .from('profiles')
+          .insert([newProfileData])
+          .select()
+          .single();
+        
+        if (createError) throw createError;
+        profile = newProfile;
       } else if (error) {
         throw error;
       }
@@ -563,29 +570,17 @@ async function startServer() {
       }
 
       // 2. Update Profile
-      const profileUpdates: any = {};
+      const profileUpdates: any = { id };
       if (role) profileUpdates.role = role;
       if (full_name !== undefined) profileUpdates.full_name = full_name;
 
-      const updateData = { id, ...profileUpdates };
-      let finalData = null;
+      const { data: finalData, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert(profileUpdates)
+        .select()
+        .single();
 
-      if (email) {
-        const { data, error: upsertError } = await supabaseAdmin.from('profiles').upsert({ ...updateData, email }).select().single();
-        if (upsertError && upsertError.message.includes('column "email" of relation "profiles" does not exist')) {
-          const { data: fallbackData, error: fallbackError } = await supabaseAdmin.from('profiles').upsert(updateData).select().single();
-          if (fallbackError) return res.status(500).json({ error: fallbackError.message });
-          finalData = fallbackData;
-        } else if (upsertError) {
-          return res.status(500).json({ error: upsertError.message });
-        } else {
-          finalData = data;
-        }
-      } else {
-        const { data, error } = await supabaseAdmin.from('profiles').upsert(updateData).select().single();
-        if (error) return res.status(500).json({ error: error.message });
-        finalData = data;
-      }
+      if (profileError) throw profileError;
 
       await logAudit(req.user.id, 'ADMIN_UPDATE_USER', 'user', { targetId: id, updates: profileUpdates });
       res.json(finalData);

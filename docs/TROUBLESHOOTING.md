@@ -62,3 +62,111 @@ Lỗi này xuất hiện trong quá trình vận hành thực tế trên Vercel,
 *   Luôn chạy `npm run build` local trước khi push code.
 *   Kiểm chứng tính đúng đắn của các alias trong các file Page và Component.
 
+## 4. Lỗi: Bảng nhiệm vụ trống trên Vercel (Empty Dashboard)
+
+Dù đã đăng nhập thành công nhưng các chỉ số đều bằng 0 và không thấy nhiệm vụ nào.
+
+### Nguyên nhân (Cause)
+*   **Môi trường Database khác biệt**: Supabase Local và Supabase Production (Vercel) là hai database độc lập. Dữ liệu tạo ở local sẽ không xuất hiện trên Vercel.
+*   **Bộ lọc RBAC (Role-Based Access Control)**: Route `/api/tasks` chỉ trả về nhiệm vụ do chính bạn tạo hoặc được giao cho bạn (`user_id` hoặc `assignee_id`). Nếu bạn đăng nhập bằng tài khoản mới chưa có task, bảng sẽ trống.
+*   **RLS (Row Level Security)**: Nếu bạn query trực tiếp từ client (không qua API backend) và chưa cấu hình Policy cho table `tasks`, Supabase sẽ trả về mảng trống để bảo mật.
+
+### Cách tái hiện (Reproduction)
+1. Đăng nhập vào bản deploy trên Vercel bằng một tài khoản mới.
+2. Truy cập Dashboard hoặc Kanban.
+3. Kết quả: "0 items", "Trống".
+
+### Cách khắc phục (Resolution)
+1.  **Kiểm tra tính năng "Nhiệm vụ mới"**: Thử nhấn nút "+ Nhiệm vụ mới" và tạo một task. Nếu task xuất hiện, hệ thống vẫn hoạt động bình thường, chỉ là database chưa có dữ liệu cũ.
+2.  **Cấu hình Policy (Nếu dùng client-side query)**: Vào Supabase Dashboard -> Database -> Policies -> Enable RLS và Add Policy cho phép người dùng xem task của chính họ.
+3.  **Kiểm tra API Log**: Nếu tạo task bị lỗi, hãy xem log Vercel để kiểm tra lỗi kết nối database.
+
+### Cách phòng tránh (Prevention)
+*   Thiết lập một vài "Task mẫu" (Seed data) cho môi trường production.
+*   Đảm bảo `SUPABASE_SERVICE_ROLE_KEY` được cấu hình đúng trên Vercel để Backend có thể bypass RLS khi cần thiết.
+
+## 5. Lỗi: Mất hết Role (Missing Roles / RBAC Failure)
+
+Người dùng đăng nhập nhưng không thấy các quyền Admin hoặc các tính năng bị hạn chế so với bản local.
+
+### Nguyên nhân (Cause)
+*   **Chưa chạy SQL Trigger**: Trong Supabase, việc tạo User trong bảng `auth.users` không tự động tạo hàng trong `public.profiles` trừ khi bạn thiết lập **SQL Trigger**.
+*   **Role mặc định**: Trigger mặc định đang để role là `nhan_vien`.
+*   **Quên config RLS cho Profiles**: Nếu bảng `profiles` có RLS nhưng chưa có Policy cho phép xem, app sẽ nhận về mảng trống hoặc báo lỗi không có quyền.
+
+### [ EMERGENCY FIX – ROLE LOST ] - Các bước xử lý nhanh
+Nếu hệ thống bị lỗi Role, hãy chạy các câu lệnh SQL sau trong **Supabase SQL Editor**:
+
+1. **Kiểm tra dữ liệu hiện tại**:
+   ```sql
+   SELECT id, role, full_name FROM profiles;
+   ```
+
+2. **Sửa lỗi RLS (QUAN TRỌNG NHẤT)** - Cho phép Client đọc được thông tin Role:
+   ```sql
+   CREATE POLICY "Allow read profiles"
+   ON profiles
+   FOR SELECT
+   USING (true);
+   ```
+
+3. **Sửa lỗi Role bị NULL**:
+   ```sql
+   UPDATE profiles
+   SET role = 'nhan_vien'
+   WHERE role IS NULL;
+   ```
+
+4. **Cấp quyền Admin cho tài khoản điều hành**:
+   ```sql
+   UPDATE profiles
+   SET role = 'admin'
+   WHERE id IN (
+     SELECT id FROM auth.users WHERE email = 'macovn@gmail.com'
+   );
+   ```
+
+### Cách tái hiện (Reproduction)
+1.  Đăng ký tài khoản mới trên Vercel.
+2.  Sau khi đăng nhập, vào trang Admin hoặc Dashboard.
+3.  Các thông báo "Bạn không có quyền" hoặc giao diện bị trống role xuất hiện.
+
+### Cách khắc phục (Resolution)
+1.  **Chạy lại Schema**: Copy nội dung trong `docs/schema.sql` (đặc biệt là phần `CREATE TRIGGER on_auth_user_created`) và chạy trong Supabase SQL Editor.
+2.  **Khởi tạo lại User**: Nếu bảng `profiles` đang trống cho user cũ, bạn có thể xóa user đó trong mục Authentication và đăng ký lại (sau khi đã chạy Trigger SQL).
+
+## 7. Lỗi: Khôi phục nhiệm vụ đã khởi tạo (Restoring Seed Tasks)
+
+Nếu hệ thống mới triển khai và bạn muốn có dữ liệu mẫu để kiểm tra hoặc khôi phục trạng thái ban đầu.
+
+### Cách thực hiện (Execution)
+1.  Truy cập vào tệp `/docs/seed.sql`.
+2.  Copy toàn bộ nội dung trong tệp đó.
+3.  Vào **Supabase SQL Editor** -> Tạo query mới -> Paste và **Run**.
+4.  Câu lệnh này sẽ tự động tìm User `macovn@gmail.com` và gán các task mẫu cho tài khoản này.
+
+### Lưu ý (Notes)
+*   Đảm bảo bạn đã đăng ký tài khoản `macovn@gmail.com` trước khi chạy script.
+*   Nếu muốn gán cho user khác, hãy sửa email trong script script.
+*   Dữ liệu sau khi chạy sẽ xuất hiện ngay lập tức trên Dashboard/Kanban.
+
+
+Khi hệ thống gặp nhiều lỗi vụn vặt về query, role hoặc hiển thị, cần thực hiện quy trình "Ổn định hóa".
+
+### Các bước đã thực hiện (Executed Acts)
+1.  **Gộp Join Assignee**: Chuyển việc join thông tin người thực hiện (`profiles`) từ client-side sang server-side trong query `/api/tasks` để tối ưu hiệu năng và tránh lỗi "Unknown User".
+2.  **Tự phục hồi Profile**: Cập nhật logic `GET /api/users/me` để tự động tạo profile nếu thiếu, đồng thời cấp quyền Admin mặc định cho email `macovn@gmail.com`.
+3.  **Rà soát RLS**: Thiết kế lại bộ Policy đảm bảo tính riêng tư nhưng vẫn cho phép Admin theo dõi toàn bộ hệ thống.
+4.  **Fix TypeScript**: Khắc phục lỗi parse ngày tháng trong Risk Analysis và đồng bộ hóa Alias `@`.
+
+### Cách khắc phục (Resolution)
+Nếu vẫn gặp lỗi role hoặc task trống sau khi deploy:
+1.  **Chạy SQL Stabilization**: (Xem mục 5) Chạy SQL để reset policy và role.
+2.  **Xóa Cache/Logout**: Đăng xuất và đăng nhập lại để app refresh JWT token và profile mới nhất.
+3.  **Kiểm tra Assignee ID**: Đảm bảo cột `assigned_to` trong tasks trùng khớp với `id` trong profiles.
+
+### Cách phòng tránh (Prevention)
+*   **Không thêm tính năng mới** khi hệ thống core (Auth/DB) chưa ổn định.
+*   Duy trì `server.ts` là nguồn tin cậy duy nhất (Single Source of Truth) cho các query phức tạp.
+
+
